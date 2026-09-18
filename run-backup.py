@@ -214,14 +214,8 @@ stop_ids = {c.id for c in containers_to_stop}
 
 if DRY_RUN:
     stop_names = sorted(c.attrs.get('Name').lstrip('/') for c in containers_to_stop)
-    hot_names = sorted(c.attrs.get('Name').lstrip('/') for c in containers_affected
-                       if c.id not in stop_ids)
     logging.warning('DRY_RUN complete. Selected volumes: %s', ', '.join(sorted(backup_volume_names)))
     logging.warning('DRY_RUN would stop/restart these containers: %s', ', '.join(stop_names) or 'none')
-    if hot_names:
-        logging.warning(
-            'DRY_RUN would back these up live (no %s.stop-during-backup label): %s',
-            RDIFF_LABEL_NAMESPACE, ', '.join(hot_names))
     logging.info('Done backing up Docker volumes')
     exit(0)
 
