@@ -10,7 +10,7 @@ from subprocess import CalledProcessError
 import docker
 from requests.exceptions import ConnectionError
 
-RDIFF_LABEL_NAMESPACE = "com.rdiff-backup"
+RDIFF_LABEL_NAMESPACE = "com.rdiff-volume-backup"
 DRY_RUN = str(getenv('DRY_RUN', False)).strip().lower() == 'true'
 
 # Setup logging
@@ -97,7 +97,7 @@ except ConnectionError as e:
 
 # Containers that have opted in to backups via a label under RDIFF_LABEL_NAMESPACE
 labeled_containers = [
-    c for c in all_containers if any(k.startswith(RDIFF_LABEL_NAMESPACE + '.') for k in labels(c))
+    c for c in all_containers if any(k.startswith(RDIFF_LABEL_NAMESPACE + '.backup') for k in labels(c))
 ]
 
 if not labeled_containers:
