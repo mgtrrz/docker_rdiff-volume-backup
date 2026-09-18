@@ -2,9 +2,9 @@
 
 This is a Docker image that is meant to be used to backup your Docker volumes using the [rdiff-backup](http://rdiff-backup.nongnu.org/) tool for incremental backups. If you want to backup a host directory instead of Docker volumes, [tozd/rdiff-backup](https://hub.docker.com/r/tozd/rdiff-backup/) would be a more suitable container.
 
-This is a fork of kadimasolutions' [docker-rdiff-volume-backup](https://github.com/kadimasolutions/docker_rdiff-volume-backup) and covers some specific nuances about my Docker setup, particularly with CIFS mounted docker volumes. This script also allows stopping the container during backups and starting it backup to handle databases.
+This is a fork of kadimasolutions' [docker-rdiff-volume-backup](https://github.com/kadimasolutions/docker_rdiff-volume-backup) and covers some specific nuances about my Docker setup, particularly with CIFS mounted docker volumes. This script also allows stopping the container before backing it up and restarting it to handle sensitive applications, such as databases.
 
-Finally, instead of backing up every volume, you can specify which volume to backup with labels.
+Finally, instead of backing up every volume in Docker, you can specify which volume to backup with labels.
 
 
 ## Usage
@@ -20,15 +20,14 @@ This container needs to mount the Docker socket to inspect containers and their 
 - it is **not** a CIFS mount (when `IGNORE_CIFS=true`, the default), and
 - it is **not** listed in that container's `com.rdiff-backup.exclude-volumes` label.
 
- Before a backup of a volume begins, the container attaches to it, which risks a half-written state. So **every running container that mounts a volume in the backup set is stopped first and restarted after**, regardless of whether it carries a label. The stop → backup → restart sequence is wrapped in a `try`/`finally`, so the containers are always started back up even if a backup fails. Set `DRY_RUN=true` to exercise only the selection logic (it prints the selected volumes and the containers it *would* stop, but stops nothing and writes nothing).
+By default, containers are not stopped when backups of its volumes are taken. When the `stop-during-backup` label is set to true, the container is stopped before rdiff backups begin.
 
- Backups will be run on the given `CRON_SCHEDULE` which is `0 0 * * *` ( daily at 12:00am ) by default. rdiff-backup will keep diffs that allow you to reproduce any backup up to the `BACKUP_RETENTION` time period which is `12M` ( 12 months ) by default. Each volume is backed up individually using rdiff-backup to a directory in `/backup` of the same name.
+Backups will run on the given `CRON_SCHEDULE` which is `0 0 * * *` ( daily at 12:00am ) by default. rdiff-backup will keep diffs that allow you to reproduce any backup up to the `BACKUP_RETENTION` time period which is `12M` ( 12 months ) by default. Each volume is backed up individually using rdiff-backup to a directory in `/backup` of the same name.
 
 A Docker Compose file would look like this:
 
 **docker-compose.yml**
 ```yml
-version: '2'
 services:
   rdiff-volume-backup:
     image: kadimasolutions/rdiff-volume-backup
@@ -123,6 +122,12 @@ The `HOST_DIR` is the prefix that should be applied to the Docker volume path wh
 
 **Default:** `/host`
 
+#### RUN_BACKUP_ON_START
+
+Start a backup as soon as the container starts. 
+
+**Default:** `false`
+
 #### IGNORE_CIFS
 
 When set to `true`, volumes whose `driver_opts` declare `type: cifs` are skipped, even though Docker reports their `Driver` as `local`. This is how Docker models a NFS/SMB bind-mount through a "local" volume — the data already lives on a remote share, so there is nothing to back up locally.
@@ -141,8 +146,9 @@ A container is only considered for backups if it carries at least one label unde
 
 | Label | Default | Meaning |
 |---|---|---|
-| `com.rdiff-backup.stop-during-backup` | `false` | Documented for intent. The script always stops any running container that mounts a volume in the backup set, so this label is currently informational (it is kept for forward-compatibility, in case stopping becomes opt-in). |
-| `com.rdiff-backup.exclude-volumes` | *(unset)* | Comma-separated list of volume names to skip for this container. Values may use the compose short name (e.g. `media`) and the script resolves them to the real Docker name (`mycomposeproj_media`). External / `external:true` volumes should be written with their full name. |
+| `com.rdiff-volume-backup.backup` | *(unset)* | _Required_ . Must be set for the script to work and recognizing which containers' volumes to backup. It must be set to true to enable backups. Can be disabled with false. |
+| `com.rdiff-volume-backup.stop-during-backup` | `false` | _Optional_. Whether to stop containers before backing up its volumes. False is the default behavior if this is omitted. Set to true for sensitive applications such as databases. |
+| `com.rdiff-volume-backup.exclude-volumes` | *(unset)* | _Optional_. Comma-separated list of volume names to skip for this container. Values may use the compose short name (e.g. `media`) and the script resolves them to the real Docker name (`mycomposeproj_media`). External / `external:true` volumes should be written with their full name. |
 
 Example:
 
@@ -151,11 +157,17 @@ services:
   mycomposeproj:
     image: example/app:latest
     labels:
-      com.rdiff-backup.stop-during-backup: "true"
-      com.rdiff-backup.exclude-volumes: "media"
+      com.rdiff-volume-backup.backup: "true"
+      com.rdiff-volume-backup.stop-during-backup: "true"  # Optional, defaults to false if omitted.
+      com.rdiff-volume-backup.exclude-volumes: "media"    # Optional, backs up all volumes if omitted.
     volumes:
-      - config:/myapp/config   # backed up
-      - media:/media           # this one would be skipped
+      - config:/myapp/config   # Would be backed up
+      - media:/media           # This one would be skipped
+
+volumes:
+  config:
+  media:
+    external: true
 ```
 
 ## Known issues
