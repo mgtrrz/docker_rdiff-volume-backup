@@ -2,11 +2,25 @@
 
 This is a Docker image that is meant to be used to backup your Docker volumes using the [rdiff-backup](http://rdiff-backup.nongnu.org/) tool for incremental backups. If you want to backup a host directory instead of Docker volumes, [tozd/rdiff-backup](https://hub.docker.com/r/tozd/rdiff-backup/) would be a more suitable container.
 
+This is a fork of kadimasolutions' [docker-rdiff-volume-backup](https://github.com/kadimasolutions/docker_rdiff-volume-backup) and covers some specific nuances about my Docker setup, particularly with CIFS mounted docker volumes. This script also allows stopping the container during backups and starting it backup to handle databases.
+
+Finally, instead of backing up every volume, you can specify which volume to backup with labels.
+
+
 ## Usage
 
 ### Summary
 
-This container needs to mount the Docker socket to get the list of Docker volumes of the specified `VOLUME_DRIVER`, which is `local` by default. The directory containing the volumes for that particular driver also needs to be mounted. Finally, you need to bind mount a host directory or a Docker volume ( with a different driver than the volumes that you want to back up ) to the `/backup` directory to persist the backups.
+This container needs to mount the Docker socket to inspect containers and their volumes, and also to stop/restart containers during a backup. The directory containing the volumes for the `VOLUME_DRIVER` ( `local` by default ) also needs to be mounted. Finally, you need to bind mount a host directory or a Docker volume ( with a different driver than the volumes that you want to back up ) to the `/backup` directory to persist the backups.
+
+**Which volumes get backed up is driven by labels that you add to the container.** A volume is included only if *all* of the following are true:
+
+- it is mounted by a container that has at least one label under the `LABEL_PREFIX` ( default `com.rdiff-backup` ),
+- its `Driver` matches `VOLUME_DRIVER` ('local' by default),
+- it is **not** a CIFS mount (when `IGNORE_CIFS=true`, the default), and
+- it is **not** listed in that container's `com.rdiff-backup.exclude-volumes` label.
+
+ Before a backup of a volume begins, the container attaches to it, which risks a half-written state. So **every running container that mounts a volume in the backup set is stopped first and restarted after**, regardless of whether it carries a label. The stop → backup → restart sequence is wrapped in a `try`/`finally`, so the containers are always started back up even if a backup fails. Set `DRY_RUN=true` to exercise only the selection logic (it prints the selected volumes and the containers it *would* stop, but stops nothing and writes nothing).
 
  Backups will be run on the given `CRON_SCHEDULE` which is `0 0 * * *` ( daily at 12:00am ) by default. rdiff-backup will keep diffs that allow you to reproduce any backup up to the `BACKUP_RETENTION` time period which is `12M` ( 12 months ) by default. Each volume is backed up individually using rdiff-backup to a directory in `/backup` of the same name.
 
@@ -74,7 +88,7 @@ The full list of environment variables.
 
 #### VOLUME_DRIVER
 
-The `VOLUME_DRIVER` tells the container what type of Docker volume to backup. All volume of the specified driver will be backed up.
+The `VOLUME_DRIVER` restricts backups to volumes whose driver matches this value. It is applied *on top of* the container-label selection: a volume is only backed up if its driver equals `VOLUME_DRIVER` (see the bullet list in the Summary above). Most local, NFS-backed and CIFS/SMB "bind" volumes report `local` as their driver, so this filter alone does not exclude your NAS shares — use `IGNORE_CIFS` and `exclude-volumes` for that.
 
 **Default:** `local`
 
@@ -109,3 +123,41 @@ The `HOST_DIR` is the prefix that should be applied to the Docker volume path wh
 
 **Default:** `/host`
 
+#### IGNORE_CIFS
+
+When set to `true`, volumes whose `driver_opts` declare `type: cifs` are skipped, even though Docker reports their `Driver` as `local`. This is how Docker models a NFS/SMB bind-mount through a "local" volume — the data already lives on a remote share, so there is nothing to back up locally.
+
+**Default:** `true`
+
+#### DRY_RUN
+
+When set to `true`, the script runs only the volume-selection pass and prints the volumes it *would* back up plus the running containers it *would* stop, then exits without stopping anything and without writing any backups. Useful for verifying your labels before the first real run.
+
+**Default:** `false`
+
+### Container Labels
+
+A container is only considered for backups if it carries at least one label under the `LABEL_PREFIX`. Two keys are recognised:
+
+| Label | Default | Meaning |
+|---|---|---|
+| `com.rdiff-backup.stop-during-backup` | `false` | Documented for intent. The script always stops any running container that mounts a volume in the backup set, so this label is currently informational (it is kept for forward-compatibility, in case stopping becomes opt-in). |
+| `com.rdiff-backup.exclude-volumes` | *(unset)* | Comma-separated list of volume names to skip for this container. Values may use the compose short name (e.g. `media`) and the script resolves them to the real Docker name (`mycomposeproj_media`). External / `external:true` volumes should be written with their full name. |
+
+Example:
+
+```yml
+services:
+  mycomposeproj:
+    image: example/app:latest
+    labels:
+      com.rdiff-backup.stop-during-backup: "true"
+      com.rdiff-backup.exclude-volumes: "media"
+    volumes:
+      - config:/myapp/config   # backed up
+      - media:/media           # this one would be skipped
+```
+
+## Known issues
+
+I would have liked for this to look at labels on volumes instead to determine which volume to backup, but annoyingly, volume objects in Docker are immutable once created. Therefore, I did not find it practical to delete volumes (and their contents) just to add/modify/remove a new label just to specify it.

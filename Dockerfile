@@ -7,6 +7,7 @@ ENV BACKUP_RETENTION 12M
 ENV FORCE_BACKUP_CLEANUP false
 ENV BACKUP_DIR /backup
 ENV HOST_DIR /host
+ENV IGNORE_CIFS true
 
 # Install the python Docker library
 RUN pip3 install docker
