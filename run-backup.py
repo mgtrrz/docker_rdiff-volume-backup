@@ -40,8 +40,7 @@ if DRY_RUN:
 
 def labels(container):
     """Return the labels dict of a container (never None)."""
-    attrs = container.attrs if isinstance(container, dict) else container.attrs
-    config = attrs.get('Config', {}) or {}
+    config = container.attrs.get('Config', {}) or {}
     return config.get('Labels') or {}
 
 
@@ -96,9 +95,15 @@ except ConnectionError as e:
     exit(1)
 
 # Containers that have opted in to backups via a label under RDIFF_LABEL_NAMESPACE
-labeled_containers = [
-    c for c in all_containers if any(k.startswith(RDIFF_LABEL_NAMESPACE + '.backup') for k in labels(c))
-]
+labeled_containers = []
+for container in all_containers:
+    has_backup_label = False
+    for label_key, label_value in labels(container).items():
+        if label_key.startswith(RDIFF_LABEL_NAMESPACE + '.backup') and label_value == "true":
+            has_backup_label = True
+            break
+    if has_backup_label:
+        labeled_containers.append(container)
 
 if not labeled_containers:
     logging.info('No containers with a %s label found; nothing to do.', RDIFF_LABEL_NAMESPACE)
