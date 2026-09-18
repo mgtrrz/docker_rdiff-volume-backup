@@ -15,12 +15,12 @@ This container needs to mount the Docker socket to inspect containers and their 
 
 **Which volumes get backed up is driven by labels that you add to the container.** A volume is included only if *all* of the following are true:
 
-- it is mounted by a container that has at least one label under the `LABEL_PREFIX` ( default `com.rdiff-backup` ),
+- it is mounted by a container that has at least one label: `com.rdiff-volume-backup.backup: true`,
 - its `Driver` matches `VOLUME_DRIVER` ('local' by default),
 - it is **not** a CIFS mount (when `IGNORE_CIFS=true`, the default), and
-- it is **not** listed in that container's `com.rdiff-backup.exclude-volumes` label.
+- it is **not** listed in that container's `com.rdiff-volume-backup.exclude-volumes` label.
 
-By default, containers are not stopped when backups of its volumes are taken. When the `stop-during-backup` label is set to true, the container is stopped before rdiff backups begin.
+By default, containers are not stopped when backups of its volumes are taken. When the `stop-during-backup` label is set to true, the container is stopped before rdiff backups begin. See the below section for more information on these labels.
 
 Backups will run on the given `CRON_SCHEDULE` which is `0 0 * * *` ( daily at 12:00am ) by default. rdiff-backup will keep diffs that allow you to reproduce any backup up to the `BACKUP_RETENTION` time period which is `12M` ( 12 months ) by default. Each volume is backed up individually using rdiff-backup to a directory in `/backup` of the same name.
 
