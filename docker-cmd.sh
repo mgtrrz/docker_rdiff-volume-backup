@@ -3,7 +3,7 @@
 # Setup the crontab
 echo "$CRON_SCHEDULE /run-backup.py" | crontab -
 
-if [ "$RUN_ON_START" = true ]; then
+if [ "$RUN_BACKUP_ON_START" = true ]; then
   ./run-backup.py
 fi
 
