@@ -49,6 +49,15 @@ services:
 #volumes:
   #volume-backups:
     #driver: docker-volume-driver-that-is-not-the-same-as-VOLUME_DRIVER
+  
+# Backing up to a NAS? Consider a CIFS mount
+#volumes:
+  #volume-backups:
+    #driver: local
+    #driver_opts:
+      #type: cifs
+      #device: //<nas-ip-address>/Backups
+      #o: "username=smbuser,password=${BACKUP_PW},uid=1000,gid=1000,file_mode=0664,dir_mode=0775"
 ```
 
 ### Identifying the Docker Volume mountpoint
@@ -142,11 +151,11 @@ When set to `true`, the script runs only the volume-selection pass and prints th
 
 ### Container Labels
 
-A container is only considered for backups if it carries at least one label under the `LABEL_PREFIX`. Two keys are recognised:
+A container is only considered for backups if it carries the `com.rdiff-volume-backup.backup` label. Two additional keys can be used:
 
 | Label | Default | Meaning |
 |---|---|---|
-| `com.rdiff-volume-backup.backup` | *(unset)* | _Required_ . Must be set for the script to work and recognizing which containers' volumes to backup. It must be set to true to enable backups. Can be disabled with false. |
+| `com.rdiff-volume-backup.backup` | *(unset)* | _Required_ . Must be set for the script to work and recognizing which containers' volumes to backup _and_ must be set to true to enable backups. Can be disabled with false. |
 | `com.rdiff-volume-backup.stop-during-backup` | `false` | _Optional_. Whether to stop containers before backing up its volumes. False is the default behavior if this is omitted. Set to true for sensitive applications such as databases. |
 | `com.rdiff-volume-backup.exclude-volumes` | *(unset)* | _Optional_. Comma-separated list of volume names to skip for this container. Values may use the compose short name (e.g. `media`) and the script resolves them to the real Docker name (`mycomposeproj_media`). External / `external:true` volumes should be written with their full name. |
 
