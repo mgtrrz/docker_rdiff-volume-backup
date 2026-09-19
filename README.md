@@ -149,6 +149,12 @@ When set to `true`, the script runs only the volume-selection pass and prints th
 
 **Default:** `false`
 
+#### LOG_LEVEL
+
+Logging level to display. From most verbose to least: debug, info, warning, error, critical.
+
+**Default:** `info`
+
 ### Container Labels
 
 A container is only considered for backups if it carries the `com.rdiff-volume-backup.backup` label. Two additional keys can be used:

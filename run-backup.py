@@ -18,10 +18,12 @@ def is_true(value):
     return str(value).strip().lower() == 'true'
 
 
-DRY_RUN = is_true(getenv('DRY_RUN', 'false'))
+DRY_RUN = is_true(env['DRY_RUN'])
 
 # Setup logging
-logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', 
+                    level=env['LOG_LEVEL'].upper(), 
+                    datefmt='%Y-%m-%d %H:%M:%S')
 
 logging.info('Starting Docker volume backups...')
 
@@ -41,7 +43,7 @@ except KeyError as e:
     exit(1)
 
 if DRY_RUN:
-    logging.warning('DRY_RUN is enabled: no containers will be stopped and no backups will be written.')
+    logging.warning('DRY_RUN is enabled: no containers will be stopped and no backups will be created.')
 
 
 def labels(container):
@@ -151,7 +153,7 @@ for container in all_containers:
         labeled_containers.append(container)
 
 if not labeled_containers:
-    logging.info('No containers with a %s label found; nothing to do.', RDIFF_LABEL_NAMESPACE)
+    logging.info('No containers with a %s label found; nothing to do.', RDIFF_LABEL_NAMESPACE + '.backup')
     logging.info('Done backing up Docker volumes')
     exit(0)
 
